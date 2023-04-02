@@ -81,24 +81,24 @@ class TemporalAttentionLayer(nn.Module):
         E_norm = F.softmax(E_att, dim=1)
         return E_norm
 
+
 class GinConvLayer(nn.Module):
     """
     基于 GAT 卷积的空间卷积模型
     """
+
     def __init__(self, in_channels: int, out_channels: int,
-                 edge_index: torch.Tensor, device, K=2):
+                 edge_index: torch.Tensor, K=2):
         """
         构造函数
         :param K: GIN网络层数，消息聚集邻居的跳数，默认为 2
         :param in_channels: 输入通道数
         :param out_channels: 输出通道数
-        :param device: 模型所在设备
         """
         super(GinConvLayer, self).__init__()
         self.K = K
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.device = device
         # 多层 GAT 卷积
         self.ginConvList = nn.ModuleList([
             GINConv(
@@ -136,24 +136,21 @@ class SpatialConvLayer(nn.Module):
     """
 
     def __init__(self, K: int, edge_index: torch.Tensor,
-                 in_channels: int, out_channels: int, device):
+                 in_channels: int, out_channels: int):
         """
         构造函数
         :param K: GIN网络层数，消息聚集邻居的跳数，默认为 2
         :param in_channels: 输入通道数
         :param out_channels: 输出通道数
-        :param device: 模型所在设备
         """
         super(SpatialConvLayer, self).__init__()
         self.K = K
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.device = device
         self.ginConv = GinConvLayer(
             in_channels=in_channels,
             out_channels=out_channels,
             edge_index=edge_index,
-            device=device,
             K=K
         )
 
@@ -187,8 +184,7 @@ class STACGINBlock(nn.Module):
 
     def __init__(self, in_channels: int, K: int, spatial_channels: int,
                  time_channels: int, edge_index: torch.Tensor,
-                 time_strides: int, vertices_num: int, time_step_num: int,
-                 device):
+                 time_strides: int, vertices_num: int, time_step_num: int):
         """
         构造函数
         :param in_channels: 如通道数
@@ -198,7 +194,6 @@ class STACGINBlock(nn.Module):
         :param time_strides: 时间步
         :param vertices_num: 节点数量 N
         :param time_step_num: 时间步数量 T
-        :param device: 模型所在设备
         """
         super(STACGINBlock, self).__init__()
         # 时间注意力层
@@ -218,8 +213,7 @@ class STACGINBlock(nn.Module):
             K=K,
             edge_index=edge_index,
             in_channels=in_channels,
-            out_channels=spatial_channels,
-            device=device
+            out_channels=spatial_channels
         )
         # 时间卷积层
         self.TimeConv = nn.Conv2d(
@@ -292,8 +286,7 @@ class STACGIN(nn.Module):
     def __init__(self, block_num: int, in_channels: int, K: int,
                  edge_index: torch.Tensor, spatial_channels: int,
                  time_channels: int, time_strides: int, predict_steps: int,
-                 input_steps: int, vertices_num: int,
-                 in_features: int, device):
+                 input_steps: int, vertices_num: int, in_features: int):
         """
         构造函数
         :param block_num: STACGIN 块数量
@@ -307,7 +300,6 @@ class STACGIN(nn.Module):
         :param vertices_num: 节点数量
         :param edge_index: 邻接矩阵对应的双列表表示
         :param in_features: 输入特征数，最外层的特征数
-        :param device: 模型所在设备
         """
         super(STACGIN, self).__init__()
 
@@ -328,7 +320,6 @@ class STACGIN(nn.Module):
                 time_strides=time_strides,
                 vertices_num=vertices_num,
                 time_step_num=input_steps,
-                device=device,
                 spatial_channels=spatial_channels
             )
         ])
@@ -343,7 +334,6 @@ class STACGIN(nn.Module):
                 time_strides=1,
                 vertices_num=vertices_num,
                 time_step_num=input_steps // time_strides,
-                device=device
             ) for _ in range(block_num - 1)
         ])
         # 输出卷积层
@@ -415,7 +405,6 @@ def make_model(
         predict_steps=predict_step,
         input_steps=input_step,
         vertices_num=vertices_num,
-        device=device,
         edge_index=edge_index,
         in_features=in_features
     ).to(device)
@@ -460,7 +449,7 @@ if __name__ == '__main__':
         input_step=input_steps,
         predict_step=predict_steps,
         device=torch.device('cpu'),
-        edge_index=torch.from_numpy(edge_index).type(torch.long),
+        edge_index=torch.from_numpy(edge_index).type(torch.long).to('cpu'),
         in_features=features_num
     )
     output_mat = model(X)

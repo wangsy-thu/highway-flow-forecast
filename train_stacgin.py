@@ -98,7 +98,7 @@ stacgin_net = make_model(
     input_step=len_input,
     vertices_num=num_of_vertices,
     device=DEVICE,
-    edge_index=torch.from_numpy(edge_index).type(torch.long)
+    edge_index=torch.from_numpy(edge_index).type(torch.long).to(DEVICE)
 )
 
 
