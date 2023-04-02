@@ -20,7 +20,7 @@ if __name__ == '__main__':
     X = torch.rand((batch_size, vertices_num, features_num, time_step_num))
     print('input X shape: {}'.format(X.size()))
 
-    edge_index = get_edge_index(adj_filename)
+    edge_index = get_edge_index(data_dir)
 
     model = make_model(
         block_num=2,
