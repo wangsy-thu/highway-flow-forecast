@@ -1,12 +1,15 @@
+import matplotlib.pyplot as plt
+import networkx as nx
 import tqdm
 from tqdm import trange
 
 
-def load_highway_grid(data_dir: str):
+def load_highway_grid(data_dir: str, edge_mode: str):
     """
     加载高速路网数据信息
     :param data_dir: 高速节点数据文件名称
-    :return: vertices_index, edge_index
+    :param edge_mode: 边输出格式 edge_index 与 edge_list
+    :return: gate_list, station_list, vertices_index, edge_index
             vertices_index: {
                 vertex_name: vertex_id
             }
@@ -18,6 +21,7 @@ def load_highway_grid(data_dir: str):
     count = 0
     print('=====1-读取收费站，构建收费站列表=====')
     with open(data_dir + '04-辽宁收费站.txt', 'r', encoding='utf-8') as f:
+        f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取收费站数据'):
             fee_station_info = row.split(',')
@@ -35,7 +39,7 @@ def load_highway_grid(data_dir: str):
                     'name': fee_station_name,
                     'post_code': fee_station_post_code,
                     'longitude': fee_station_longitude,
-                    'latitude': fee_station_latitude
+                    'latitude': fee_station_latitude[:-1]
                 }
             )
             count += 1
@@ -44,8 +48,10 @@ def load_highway_grid(data_dir: str):
     gates = []
     bridge_vertex_names = []  # 虚拟节点信息
     reverse_count = 0
+    is_reverse = False
     print('=====2-读取门架，构建门架列表=====')
     with open(data_dir + '03-门架.txt', 'r', encoding='utf-8') as f:
+        f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取门架数据'):
             gate_info = row.split(',')
@@ -58,7 +64,7 @@ def load_highway_grid(data_dir: str):
             gate_latitude = gate_info[4]  # 门架纬度
             gate_label = (gate_name[-1] == '1')  # 门架是否为第一个
 
-            if (reverse_count == 0 and gate_label) or (not gate_label):
+            if (not is_reverse) and ((reverse_count == 0 and gate_label) or (not gate_label)):
                 # 加入门架列表 且 当前为正向
                 gates.append(
                     {
@@ -69,7 +75,7 @@ def load_highway_grid(data_dir: str):
                         'end': gate_end,
                         'post_code': gate_post_code,
                         'longitude': gate_longitude,
-                        'latitude': gate_latitude,
+                        'latitude': gate_latitude[:-1],
                     }
                 )
                 # 加入桥接节点列表
@@ -83,8 +89,10 @@ def load_highway_grid(data_dir: str):
                     )
                 reverse_count += 1
                 count += 1
+                is_reverse = False
             elif reverse_count > 0 and gate_label:
                 # 反向门架序列
+                is_reverse=True
                 gates.append(
                     {
                         'id': count - reverse_count,
@@ -94,10 +102,28 @@ def load_highway_grid(data_dir: str):
                         'end': gate_end,
                         'post_code': gate_post_code,
                         'longitude': gate_longitude,
-                        'latitude': gate_latitude,
+                        'latitude': gate_latitude[:-1],
                     }
                 )
                 reverse_count -= 1  # 一个反向完成
+                if reverse_count == 0:
+                    is_reverse = False
+            elif reverse_count > 0 and is_reverse:
+                gates.append(
+                    {
+                        'id': count - reverse_count,
+                        'code': gate_code,
+                        'name': gate_name,
+                        'start': gate_start,
+                        'end': gate_end,
+                        'post_code': gate_post_code,
+                        'longitude': gate_longitude,
+                        'latitude': gate_latitude[:-1],
+                    }
+                )
+                reverse_count -= 1  # 一个反向完成
+                if reverse_count == 0:
+                    is_reverse = False
 
     # 3, 构建高速路网节点索引
     vertex_name_index = {}  # 名称索引
@@ -127,7 +153,7 @@ def load_highway_grid(data_dir: str):
     # 6, 构建高速路网邻接矩阵
     edge_indices = []
     bridge_vertex_index = {}  # 桥接节点索引，key为node id，value 为 Gate or Station ID
-    for v_idx in range(0, count - vertices_num):
+    for v_idx in range(vertices_num, count):
         bridge_vertex_index[v_idx] = [], []
     previous_gate_idx = 0
     reverse_count = 0
@@ -191,10 +217,29 @@ def load_highway_grid(data_dir: str):
         gate_idx_lst, edge_idx_lst = bridge_vertex_index[del_idx]
         for i in range(len(gate_idx_lst) - 1):
             for j in range(i + 1, len(gate_idx_lst)):
-                new_edges.append([i, j])
-        edge_idx_lst.extend(edge_idx_lst)
+                new_edges.append([
+                    gate_idx_lst[i],
+                    gate_idx_lst[j]
+                ])
+        del_edge_index.extend(edge_idx_lst)
 
-    edge_index = [edge for idx, edge in edge_indices if idx not in del_edge_index]
+    edge_index = [edge for idx, edge in enumerate(edge_indices) if idx not in del_edge_index]
     edge_index.extend(new_edges)
 
-    return vertex_code_index, edge_index
+    if edge_mode == 'edge_index':
+        # 重整 edge index 格式
+        edge_idx = [[], []]
+        for e in edge_index:
+            edge_idx[0].append(e[0])
+            edge_idx[1].append(e[1])
+        return gates, fee_stations, vertex_code_index, edge_idx
+    else:
+        return gates, fee_stations, vertex_code_index, edge_index
+
+
+if __name__ == '__main__':
+    gate_list, station_list, vertex_code_index, edge_index = load_highway_grid('./data/LN/', edge_mode='edge_list')
+    G = nx.Graph()
+    G.add_edges_from(edge_index)
+    nx.draw_networkx(G, node_size=400, node_color='r')
+    plt.show()
