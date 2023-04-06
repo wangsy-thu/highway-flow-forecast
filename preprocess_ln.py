@@ -20,7 +20,7 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     fee_stations = []
     count = 0
     print('=====1-读取收费站，构建收费站列表=====')
-    with open(data_dir + '04-辽宁收费站.txt', 'r', encoding='utf-8') as f:
+    with open(data_dir + '04-辽宁收费站.txt', 'r', encoding='gbk') as f:
         f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取收费站数据'):
@@ -50,7 +50,7 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     reverse_count = 0
     is_reverse = False
     print('=====2-读取门架，构建门架列表=====')
-    with open(data_dir + '03-门架.txt', 'r', encoding='utf-8') as f:
+    with open(data_dir + '03-门架.txt', 'r', encoding='gbk') as f:
         f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取门架数据'):
@@ -241,5 +241,5 @@ if __name__ == '__main__':
     gate_list, station_list, vertex_code_index, edge_index = load_highway_grid('./data/LN/', edge_mode='edge_list')
     G = nx.Graph()
     G.add_edges_from(edge_index)
-    nx.draw_networkx(G, node_size=400, node_color='r')
+    nx.draw_networkx(G, node_size=5, node_color='b', with_labels=False)
     plt.show()
