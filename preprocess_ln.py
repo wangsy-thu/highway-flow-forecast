@@ -1,7 +1,11 @@
+import json
+
 import matplotlib.pyplot as plt
 import networkx as nx
 import tqdm
 from tqdm import trange
+import os
+import csv
 
 
 def load_highway_grid(data_dir: str, edge_mode: str):
@@ -20,7 +24,7 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     fee_stations = []
     count = 0
     print('=====1-读取收费站，构建收费站列表=====')
-    with open(data_dir + '04-辽宁收费站.txt', 'r', encoding='gbk') as f:
+    with open(data_dir + '04-辽宁收费站.txt', 'r', encoding='utf-8') as f:
         f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取收费站数据'):
@@ -50,7 +54,7 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     reverse_count = 0
     is_reverse = False
     print('=====2-读取门架，构建门架列表=====')
-    with open(data_dir + '03-门架.txt', 'r', encoding='gbk') as f:
+    with open(data_dir + '03-门架.txt', 'r', encoding='utf-8') as f:
         f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取门架数据'):
@@ -237,8 +241,43 @@ def load_highway_grid(data_dir: str, edge_mode: str):
         return gates, fee_stations, vertex_code_index, edge_index
 
 
+def save_to_csv(file_name: str, column_list: list, data_list: list):
+    file_path = './data/LN/'
+
+    # 当文件不存在时，创建文件
+    if not os.path.exists(file_path):
+        os.mkdir(file_path)
+
+    # 打开文件
+    with open(file_path + file_name, 'w', encoding='utf-8', newline='') as f:
+
+        # 创建CSV对象
+        writer = csv.writer(f)
+
+        writer.writerow(column_list)
+        writer.writerows(data_list)
+
+
 if __name__ == '__main__':
     gate_list, station_list, vertex_code_index, edge_index = load_highway_grid('./data/LN/', edge_mode='edge_list')
+
+    # 保存路网结构与数据到文件
+    # 1, Edge Index
+    edge_idx_column_list = [
+        'from',
+        'to'
+    ]
+    save_to_csv('LN.csv', edge_idx_column_list, edge_index)
+
+    # 2, All Vertices
+    vertex_index_file_path = './data/LN/index/'
+    if not os.path.isfile(vertex_index_file_path):
+        os.mkdir(vertex_index_file_path)
+
+    with open(vertex_index_file_path + 'vertex_index.json', 'w') as fj:
+        json.dump(vertex_code_index, fj, indent=2)
+
+    # 可视化路网结构
     G = nx.Graph()
     G.add_edges_from(edge_index)
     nx.draw_networkx(G, node_size=5, node_color='b', with_labels=False)
