@@ -1,18 +1,20 @@
+import csv
 import json
+import os
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import tqdm
 from tqdm import trange
-import os
-import csv
 
 
-def load_highway_grid(data_dir: str, edge_mode: str):
+def load_highway_grid(data_dir: str, edge_mode: str, file_encoding='utf-8'):
     """
     加载高速路网数据信息
     :param data_dir: 高速节点数据文件名称
     :param edge_mode: 边输出格式 edge_index 与 edge_list
+    :param file_encoding: 读取文件编码格式
     :return: gate_list, station_list, vertices_index, edge_index
             vertices_index: {
                 vertex_name: vertex_id
@@ -24,7 +26,7 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     fee_stations = []
     count = 0
     print('=====1-读取收费站，构建收费站列表=====')
-    with open(data_dir + '04-辽宁收费站.txt', 'r', encoding='utf-8') as f:
+    with open(data_dir + '04-辽宁收费站.txt', 'r', encoding=file_encoding) as f:
         f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取收费站数据'):
@@ -54,7 +56,7 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     reverse_count = 0
     is_reverse = False
     print('=====2-读取门架，构建门架列表=====')
-    with open(data_dir + '03-门架.txt', 'r', encoding='utf-8') as f:
+    with open(data_dir + '03-门架.txt', 'r', encoding=file_encoding) as f:
         f.readline()  # 从第二行开始读
         rows = f.readlines()
         for row in tqdm.tqdm(rows, desc='读取门架数据'):
@@ -230,6 +232,23 @@ def load_highway_grid(data_dir: str, edge_mode: str):
     edge_index = [edge for idx, edge in enumerate(edge_indices) if idx not in del_edge_index]
     edge_index.extend(new_edges)
 
+    # 7, 保存到文件
+    edge_idx_column_list = [
+        'from',
+        'to'
+    ]
+    save_to_csv('LN.csv', edge_idx_column_list, edge_index)
+
+    vertex_index_file_path = './data/LN/index/'
+    if not os.path.isfile(vertex_index_file_path):
+        os.mkdir(vertex_index_file_path)
+
+    with open(vertex_index_file_path + 'vertex_index.json', 'w') as fj:
+        json.dump({
+            'vertices_num': vertices_num,
+            'vertex_index': vertex_code_index
+        }, fj, indent=2)
+
     if edge_mode == 'edge_index':
         # 重整 edge index 格式
         edge_idx = [[], []]
@@ -242,6 +261,12 @@ def load_highway_grid(data_dir: str, edge_mode: str):
 
 
 def save_to_csv(file_name: str, column_list: list, data_list: list):
+    """
+    csv 文件保存工具方法
+    :param file_name: 文件名称
+    :param column_list: 列名称
+    :param data_list: 数据列表
+    """
     file_path = './data/LN/'
 
     # 当文件不存在时，创建文件
@@ -258,27 +283,96 @@ def save_to_csv(file_name: str, column_list: list, data_list: list):
         writer.writerows(data_list)
 
 
+
+def get_time_step_idx(flow_time: str) -> int:
+    """
+    获取时间步索引工具方法
+    :param flow_time: 流量产生时间
+    :return: 流量所在时间步 ID
+    """
+    return int(flow_time[:2]) * 12 + int(flow_time[2: 4]) // 5
+
+
+def load_daily_highway_flow(vertex_index_dir: str, flow_data_dir: str,
+                            vertices_num: int, batch_size=20) -> np.ndarray:
+    """
+    生成每日的高速流量数据，上层调用读取每日数据后进行 concatenate 操作
+    :param vertex_index_dir: 索引文件地址
+    :param flow_data_dir: 流量数据所在文件夹
+    :param vertices_num: 高速路网节点数量
+    :param batch_size: 批量读取大小，减少 IO 次数
+    :return: np.ndarray (
+        vertices_num, feature_num, time_step_num
+    )
+    """
+
+    # 加载路网节点索引
+    with open(vertex_index_dir + 'vertex_index.json', 'r') as jf:
+        j = json.load(jf)
+        vertex_index = j['vertex_index']
+
+    flow_data_file_list = [
+        flow_data_dir + d for d in os.listdir(flow_data_dir)
+    ]
+
+    # 数据格式 (time_step_num, vertices_num, feature_num)
+    # 特征分别为 (
+    #       0: 车流量总量
+    #       1: 平均收费
+    #       2: 1型号车辆数量 (客车)
+    #       3: 2型号车辆数量 (货车)
+    #       4: 3型号车辆数量 (限行)
+    #       5: 0型号车型数量 (未知)
+    # )
+    daily_flow_mat = np.zeros(
+        shape=(24 * 12, vertices_num, 6)
+    )
+
+    for flow_file_name in flow_data_file_list:
+        with open(flow_file_name, 'r', encoding='utf-8') as f:
+            while True:
+                rows = f.readlines(batch_size)
+
+                # 文件读取完成
+                if len(rows) == 0:
+                    break
+
+                # 循环读取流量数据
+                for row in rows:
+                    flow_item_info = row.split(',')
+                    vertex_id = vertex_index[flow_item_info[0]]  # 门架号(收费站号)
+
+                    time_step_id = get_time_step_idx(flow_item_info[1][8:])  # 时间步 ID
+                    flow_fee = int(flow_item_info[2])  # 产生费用 (cent)
+                    vehicle_type = int(flow_item_info[3])  # 车型
+
+                    if 0 < vehicle_type < 10:
+                        vehicle_type_id = 2
+                    elif 10 <= vehicle_type < 20:
+                        vehicle_type_id = 3
+                    elif vehicle_type == 9:
+                        vehicle_type_id = 4
+                    else:
+                        vehicle_type_id = 5
+
+                    daily_flow_mat[time_step_id, vertex_id, 0] += 1  # 流量
+                    daily_flow_mat[time_step_id, vertex_id, 1] += (flow_fee / 100)  # 金额
+                    daily_flow_mat[time_step_id, vertex_id, vehicle_type_id] += 1  # 各种车型
+    return daily_flow_mat
+
+
 if __name__ == '__main__':
     gate_list, station_list, vertex_code_index, edge_index = load_highway_grid('./data/LN/', edge_mode='edge_list')
-
-    # 保存路网结构与数据到文件
-    # 1, Edge Index
-    edge_idx_column_list = [
-        'from',
-        'to'
-    ]
-    save_to_csv('LN.csv', edge_idx_column_list, edge_index)
-
-    # 2, All Vertices
-    vertex_index_file_path = './data/LN/index/'
-    if not os.path.isfile(vertex_index_file_path):
-        os.mkdir(vertex_index_file_path)
-
-    with open(vertex_index_file_path + 'vertex_index.json', 'w') as fj:
-        json.dump(vertex_code_index, fj, indent=2)
 
     # 可视化路网结构
     G = nx.Graph()
     G.add_edges_from(edge_index)
     nx.draw_networkx(G, node_size=5, node_color='b', with_labels=False)
     plt.show()
+
+    flow_data_mat1 = load_daily_highway_flow(
+        './data/LN/index/',
+        './data/LN/flow/',
+        vertices_num=7,
+        batch_size=20
+    )
