@@ -353,7 +353,12 @@ def load_unit_highway_flow(flow_data_dir: str, flow_period: str,
                 # 循环读取流量数据
                 for row in rows:
                     flow_item_info = row.split(',')
-                    vertex_id = vertex_index[flow_item_info[0]] - offset  # 门架号(收费站号)
+                    vertex_id = vertex_index.get(flow_item_info[0])
+
+                    if vertex_id is None:
+                        # 若流量中节点不存在，跳过，继续读取
+                        continue
+                    vertex_id -= offset  # 门架号(收费站号)
 
                     time_step_id = get_time_step_idx(flow_item_info[1][6:], flow_period)  # 时间步 ID
                     flow_fee = int(flow_item_info[2])  # 产生费用 (cent)
