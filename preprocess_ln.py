@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import shutil
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -54,6 +55,7 @@ def load_highway_grid(data_dir: str, edge_mode: str, file_encoding='utf-8'):
     gates = []
     bridge_vertex_names = []  # 虚拟节点信息
     reverse_count = 0
+    station_count = count
     is_reverse = False
     print('=====2-读取门架，构建门架列表=====')
     with open(data_dir + '03-门架.txt', 'r', encoding=file_encoding) as f:
@@ -240,12 +242,15 @@ def load_highway_grid(data_dir: str, edge_mode: str, file_encoding='utf-8'):
     save_to_csv('LN.csv', edge_idx_column_list, edge_index)
 
     vertex_index_file_path = './data/LN/index/'
+    shutil.rmtree(vertex_index_file_path)
     if not os.path.isfile(vertex_index_file_path):
         os.mkdir(vertex_index_file_path)
 
     with open(vertex_index_file_path + 'vertex_index.json', 'w') as fj:
         json.dump({
             'vertices_num': vertices_num,
+            'station_num': station_count,
+            'gate_num': vertices_num - station_count,
             'vertex_index': vertex_code_index
         }, fj, indent=2)
 
@@ -284,32 +289,39 @@ def save_to_csv(file_name: str, column_list: list, data_list: list):
 
 
 
-def get_time_step_idx(flow_time: str) -> int:
+def get_time_step_idx(flow_time: str, flow_period: str) -> int:
     """
     获取时间步索引工具方法
     :param flow_time: 流量产生时间
+    :param flow_period: 流量统计周期
     :return: 流量所在时间步 ID
     """
-    return int(flow_time[:2]) * 12 + int(flow_time[2: 4]) // 5
+    if flow_period == 'daily':
+        return int(flow_time[2: 4]) * 12 + int(flow_time[4: 6]) // 5
+    elif flow_period == 'month':
+        return (int(flow_time[:2]) - 1)* 24 * 12 \
+            + int(flow_time[2: 4]) * 12 \
+            + int(flow_time[4: 6]) // 5
+    else:
+        return int(flow_time[2: 4]) * 12 + int(flow_time[4: 6]) // 5
 
 
-def load_daily_highway_flow(vertex_index_dir: str, flow_data_dir: str,
-                            vertices_num: int, batch_size=20) -> np.ndarray:
+def load_unit_highway_flow(flow_data_dir: str, flow_period: str,
+                           period_length: int, vertex_index: dict,
+                           vertices_num: int, offset: int, batch_size=20) -> np.ndarray:
     """
-    生成每日的高速流量数据，上层调用读取每日数据后进行 concatenate 操作
-    :param vertex_index_dir: 索引文件地址
+    生成每个时间单位的高速流量数据，上层调用读取每日数据后进行 concatenate 操作
     :param flow_data_dir: 流量数据所在文件夹
     :param vertices_num: 高速路网节点数量
+    :param flow_period: 流量计算周期，为 daily 与 month
+    :param period_length: 每个周期时间步数量
+    :param vertex_index: 节点代码索引
+    :param offset: 偏移量
     :param batch_size: 批量读取大小，减少 IO 次数
     :return: np.ndarray (
         vertices_num, feature_num, time_step_num
     )
     """
-
-    # 加载路网节点索引
-    with open(vertex_index_dir + 'vertex_index.json', 'r') as jf:
-        j = json.load(jf)
-        vertex_index = j['vertex_index']
 
     flow_data_file_list = [
         flow_data_dir + d for d in os.listdir(flow_data_dir)
@@ -324,11 +336,12 @@ def load_daily_highway_flow(vertex_index_dir: str, flow_data_dir: str,
     #       4: 3型号车辆数量 (限行)
     #       5: 0型号车型数量 (未知)
     # )
-    daily_flow_mat = np.zeros(
-        shape=(24 * 12, vertices_num, 6)
-    )
+    all_flow = []
 
-    for flow_file_name in flow_data_file_list:
+    for flow_file_name in tqdm.tqdm(flow_data_file_list, desc='整理月份流量'):
+        daily_flow_mat = np.zeros(
+            shape=(period_length, vertices_num, 6)
+        )
         with open(flow_file_name, 'r', encoding='utf-8') as f:
             while True:
                 rows = f.readlines(batch_size)
@@ -340,9 +353,9 @@ def load_daily_highway_flow(vertex_index_dir: str, flow_data_dir: str,
                 # 循环读取流量数据
                 for row in rows:
                     flow_item_info = row.split(',')
-                    vertex_id = vertex_index[flow_item_info[0]]  # 门架号(收费站号)
+                    vertex_id = vertex_index[flow_item_info[0]] - offset  # 门架号(收费站号)
 
-                    time_step_id = get_time_step_idx(flow_item_info[1][8:])  # 时间步 ID
+                    time_step_id = get_time_step_idx(flow_item_info[1][6:], flow_period)  # 时间步 ID
                     flow_fee = int(flow_item_info[2])  # 产生费用 (cent)
                     vehicle_type = int(flow_item_info[3])  # 车型
 
@@ -358,7 +371,78 @@ def load_daily_highway_flow(vertex_index_dir: str, flow_data_dir: str,
                     daily_flow_mat[time_step_id, vertex_id, 0] += 1  # 流量
                     daily_flow_mat[time_step_id, vertex_id, 1] += (flow_fee / 100)  # 金额
                     daily_flow_mat[time_step_id, vertex_id, vehicle_type_id] += 1  # 各种车型
-    return daily_flow_mat
+        all_flow.append(daily_flow_mat.copy())
+    return np.concatenate(all_flow, axis=0)
+
+
+def load_highway_flow(vertex_index_dir: str, data_dir: str, save_dir: str,
+                      is_save: bool, day_count_list: list) -> np.ndarray:
+    """
+    生成高速流量数据并保存
+    :param vertex_index_dir: 索引文件地址
+    :param data_dir: 数据的文件夹
+    :param save_dir: 保存的文件夹
+    :param is_save: 是否将流量矩阵保存到文件
+    :param day_count_list: 每月天数列表
+    :return: 流量矩阵
+    """
+
+    # 加载路网节点索引
+    print('=====开始流量整理=====')
+    with open(vertex_index_dir + 'vertex_index.json', 'r') as jf:
+        j = json.load(jf)
+        vertex_index = j['vertex_index']
+        gate_num = j['gate_num']
+        station_num = j['station_num']
+
+    # 1, 整理门架流量
+    print('=====1, 整理门架流量=====')
+    month_gate_dirs = os.listdir(data_dir + 'gate/')
+    gate_flow_list = []
+
+    for month_id, month_dir in enumerate(month_gate_dirs):
+        print('=====Processing Gate Flow: Month {}====='.format(month_id))
+        month_flow_mat = load_unit_highway_flow(
+            flow_data_dir=data_dir + 'gate/' + month_dir + '/',
+            flow_period='daily',
+            period_length=24 * 12,
+            vertex_index=vertex_index,
+            vertices_num=gate_num,
+            offset=station_num,
+            batch_size=20
+        )
+        gate_flow_list.append(month_flow_mat.copy())
+    all_gate_flow_mat = np.concatenate(gate_flow_list, axis=0)
+
+    # 2, 整理收费站流量
+    month_station_dirs = os.listdir(data_dir + 'station/')
+    station_flow_list = []
+
+    print('=====2, 整理收费站流量=====')
+    for month_id, month_dir in enumerate(month_station_dirs):
+        print('=====Processing Station Flow: Month {}====='.format(month_id))
+        month_flow_mat = load_unit_highway_flow(
+            flow_data_dir=data_dir + 'station/' + month_dir + '/',
+            flow_period='month',
+            period_length=day_count_list[month_id] * 24 * 12,
+            vertex_index=vertex_index,
+            vertices_num=station_num,
+            offset=0,
+            batch_size=20
+        )
+        station_flow_list.append(month_flow_mat.copy())
+    all_station_flow_mat = np.concatenate(station_flow_list, axis=0)
+
+    # 3, 合并流量
+    all_flow_mat = np.concatenate([all_station_flow_mat, all_gate_flow_mat], axis=1)
+
+    if is_save:
+        np.savez_compressed(
+            save_dir + 'LN.npz',
+            data=all_flow_mat
+        )
+
+    return all_flow_mat
 
 
 if __name__ == '__main__':
@@ -370,9 +454,17 @@ if __name__ == '__main__':
     nx.draw_networkx(G, node_size=5, node_color='b', with_labels=False)
     plt.show()
 
-    flow_data_mat1 = load_daily_highway_flow(
-        './data/LN/index/',
-        './data/LN/flow/',
-        vertices_num=7,
-        batch_size=20
+    flow_data_mat = load_highway_flow(
+        vertex_index_dir='./data/LN/index/',
+        data_dir='./data/LN/flow/',
+        save_dir='./data/LN/',
+        is_save=True,
+        day_count_list=[
+            2, 2
+        ]
     )
+
+    print(flow_data_mat[0, :, :])
+    npz_data = np.load('./data/LN/LN.npz')
+    flow_mat = npz_data['data']
+    print(flow_mat.shape)
