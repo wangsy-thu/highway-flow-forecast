@@ -503,10 +503,13 @@ if __name__ == '__main__':
     flow_mat = npz_data['data']
     print(flow_mat.shape)
 
-    file_data = np.load('./data/LN/LN.npz')
+
     plt.figure()
 
+    file_data = np.load('./data/LN/LN.npz')
     flow_mat = file_data['data']
-    flow_0 = flow_mat[:2880, 345, 4]
-    plt.plot(range(2880), flow_0)
-    plt.show()
+    flow_compressed = flow_mat[:60 * 24 * 12, :, :4].copy()
+    np.savez_compressed(
+        './data/LN/LNC.npz',
+        data=flow_compressed
+    )

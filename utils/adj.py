@@ -1,7 +1,7 @@
-import numpy as np
 import networkx as nx
+import numpy as np
 import pandas as pd
-import csv
+
 
 def get_edge_index(distance_df_filename):
     """

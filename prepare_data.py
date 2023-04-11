@@ -163,7 +163,7 @@ def normalization(train_data: np.ndarray, val_data: np.ndarray, test_data: np.nd
 
 def read_save_dataset(flow_matrix_filename: str, num_of_weeks: int, num_of_days: int,
                       num_of_hours: int, predict_step: int, points_per_hour: int,
-                      save_file=False):
+                      model_name: str, save_file=False):
     """
     读取并保存数据集，按照时间窗口将数据处理成目标格式
     :param flow_matrix_filename: 流量数据文件路径名称
@@ -172,6 +172,7 @@ def read_save_dataset(flow_matrix_filename: str, num_of_weeks: int, num_of_days:
     :param num_of_hours: 小时采样
     :param predict_step: 预测时间步
     :param points_per_hour: 每小时时间步数量
+    :param model_name: 模型名称
     :param save_file: 是否保存数据文件
     :return: (feature, target)
                 feature: np.ndarray(sample_num, num_of_depend x points_per_hour,
@@ -292,7 +293,7 @@ def read_save_dataset(flow_matrix_filename: str, num_of_weeks: int, num_of_days:
         file_name = os.path.join(file_dir_name,
                                  file_base_name + '_r' + str(num_of_hours) +
                                  '_d' + str(num_of_days) +
-                                 '_w' + str(num_of_weeks)) + '_astgcn'
+                                 '_w' + str(num_of_weeks)) + '_' + model_name[:-2]
         print('File Name: {}'.format(file_name))
         np.savez_compressed(
             file_name,
@@ -339,6 +340,7 @@ if __name__ == '__main__':
     num_of_weeks = int(training_config['num_of_weeks'])
     num_of_days = int(training_config['num_of_days'])
     num_of_hours = int(training_config['num_of_hours'])
+    model_name = training_config['model_name']
     graph_signal_matrix_filename = data_config['graph_signal_matrix_filename']
     data = np.load(graph_signal_matrix_filename)
 
@@ -349,11 +351,15 @@ if __name__ == '__main__':
         num_of_hours=num_of_hours,
         predict_step=num_for_predict,
         points_per_hour=points_per_hour,
+        model_name=model_name,
         save_file=True
     )
 
     print('=====Validation Preprocess Result=====')
-    file_data = np.load('./data/PEMS04/PEMS04_r1_d0_w0_astgcn.npz')
+    file_data = np.load('./data/{}/{}_r{}_d{}_w{}_{}.npz'.format(
+        dataset_name, dataset_name, num_of_hours,
+        num_of_days, num_of_weeks, model_name[:-2]
+    ))
     print('train_x shape:{}'.format(file_data['train_x'].shape))
     print('train_target shape:{}'.format(file_data['train_target'].shape))
     print('train_timestamp shape:{}'.format(file_data['train_timestamp'].shape))

@@ -20,7 +20,7 @@ from utils.metrics import masked_mae, masked_mse
 
 # 1,解析参数与配置文件
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", default='config/PEMS04_stacgin.conf', type=str,
+parser.add_argument("--config", default='config/LN_stacgin.conf', type=str,
                     help="configuration file path")
 args = parser.parse_args()
 config = configparser.ConfigParser()
@@ -74,6 +74,7 @@ folder_dir = '%s_h%dd%dw%d_channel%d_%e' \
 params_path = os.path.join('./experiments', dataset_name, folder_dir)
 
 edge_index = get_edge_index(adj_filename)
+print('batch size: {}'.format(batch_size))
 
 # 2,初始化模型与数据集
 train_loader, val_loader, test_loader, test_target_tensor, _mean, _std = make_flow_data_loader(
@@ -83,6 +84,7 @@ train_loader, val_loader, test_loader, test_target_tensor, _mean, _std = make_fl
     num_of_hours=num_of_hours,
     batch_size=batch_size,
     device=DEVICE,
+    model_name=model_name,
     shuffle=True
 )
 

@@ -84,6 +84,7 @@ train_loader, val_loader, test_loader, test_target_tensor, _mean, _std = make_fl
     num_of_hours=num_of_hours,
     batch_size=batch_size,
     device=DEVICE,
+    model_name=model_name,
     shuffle=True
 )
 
