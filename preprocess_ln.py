@@ -100,7 +100,7 @@ def load_highway_grid(data_dir: str, edge_mode: str, file_encoding: str):
                 is_reverse = False
             elif reverse_count > 0 and gate_label:
                 # 反向门架序列
-                is_reverse=True
+                is_reverse = True
                 gates.append(
                     {
                         'id': count - reverse_count,
@@ -280,13 +280,11 @@ def save_to_csv(file_name: str, column_list: list, data_list: list):
 
     # 打开文件
     with open(file_path + file_name, 'w', encoding='utf-8', newline='') as f:
-
         # 创建CSV对象
         writer = csv.writer(f)
 
         writer.writerow(column_list)
         writer.writerows(data_list)
-
 
 
 def get_step_idx_flow(flow_time: str, flow_period: str, flow_type: str) -> int:
@@ -301,13 +299,17 @@ def get_step_idx_flow(flow_time: str, flow_period: str, flow_type: str) -> int:
         if flow_period == 'daily':
             return int(flow_time[8: 10]) * 12 + int(flow_time[10: 12]) // 5
         elif flow_period == 'month':
-            return (int(flow_time[6: 8]) - 1)* 24 * 12 \
-                + int(flow_time[8: 10]) * 12 \
-                + int(flow_time[10: 12]) // 5
+            return (int(flow_time[6: 8]) - 1) * 24 * 12 \
+                   + int(flow_time[8: 10]) * 12 \
+                   + int(flow_time[10: 12]) // 5
     elif flow_type == 'station':
-        flow_dt = flow_time.split(' ')[0].split('/')
-        flow_tm = flow_time.split(' ')[1].split(':')
-        flow_dt.extend(flow_tm)
+        flow_ts = flow_time.split(' ')
+        flow_dt = flow_ts[0].split('/')
+        if len(flow_ts) == 1:
+            flow_dt.extend(['0', '0', '0'])
+        else:
+            flow_tm = flow_ts[1].split(':')
+            flow_dt.extend(flow_tm)
         flow_t = []
 
         for t in flow_dt:
@@ -316,9 +318,9 @@ def get_step_idx_flow(flow_time: str, flow_period: str, flow_type: str) -> int:
         if flow_period == 'daily':
             return flow_t[3] * 12 + flow_t[4] // 5
         elif flow_period == 'month':
-            return (flow_t[2] - 1)* 24 * 12 \
-                + flow_t[3] * 12 \
-                + flow_t[4] // 5
+            return (flow_t[2] - 1) * 24 * 12 \
+                   + flow_t[3] * 12 \
+                   + flow_t[4] // 5
     return 0
 
 
@@ -421,6 +423,27 @@ def load_highway_flow(vertex_index_dir: str, data_dir: str, save_dir: str,
         gate_num = j['gate_num']
         station_num = j['station_num']
 
+        # 2, 整理收费站流量
+        month_station_dirs = os.listdir(data_dir + 'station/')
+        station_flow_list = []
+
+        print('=====2, 整理收费站流量=====')
+        for month_id, month_dir in enumerate(month_station_dirs):
+            print('=====Processing Station Flow: Month {}====='.format(month_id))
+            month_flow_mat = load_unit_highway_flow(
+                flow_data_dir=data_dir + 'station/' + month_dir + '/',
+                flow_period='month',
+                period_length=day_count_list[month_id] * 24 * 12,
+                vertex_index=vertex_index,
+                vertices_num=station_num,
+                offset=0,
+                file_encoding='gbk',
+                flow_type='station',
+                batch_size=20
+            )
+            station_flow_list.append(month_flow_mat.copy())
+        all_station_flow_mat = np.concatenate(station_flow_list, axis=0)
+
     # 1, 整理门架流量
     print('=====1, 整理门架流量=====')
     month_gate_dirs = os.listdir(data_dir + 'gate/')
@@ -442,27 +465,6 @@ def load_highway_flow(vertex_index_dir: str, data_dir: str, save_dir: str,
         gate_flow_list.append(month_flow_mat.copy())
     all_gate_flow_mat = np.concatenate(gate_flow_list, axis=0)
 
-    # 2, 整理收费站流量
-    month_station_dirs = os.listdir(data_dir + 'station/')
-    station_flow_list = []
-
-    print('=====2, 整理收费站流量=====')
-    for month_id, month_dir in enumerate(month_station_dirs):
-        print('=====Processing Station Flow: Month {}====='.format(month_id))
-        month_flow_mat = load_unit_highway_flow(
-            flow_data_dir=data_dir + 'station/' + month_dir + '/',
-            flow_period='month',
-            period_length=day_count_list[month_id] * 24 * 12,
-            vertex_index=vertex_index,
-            vertices_num=station_num,
-            offset=0,
-            file_encoding='gbk',
-            flow_type='station',
-            batch_size=20
-        )
-        station_flow_list.append(month_flow_mat.copy())
-    all_station_flow_mat = np.concatenate(station_flow_list, axis=0)
-
     # 3, 合并流量
     all_flow_mat = np.concatenate([all_station_flow_mat, all_gate_flow_mat], axis=1)
 
@@ -477,7 +479,7 @@ def load_highway_flow(vertex_index_dir: str, data_dir: str, save_dir: str,
 
 if __name__ == '__main__':
     gate_list, station_list, vertex_code_index, edge_index = load_highway_grid(
-        './data/LN/', edge_mode='edge_list', file_encoding='utf-8'
+        './data/LN/', edge_mode='edge_list', file_encoding='gbk'
     )
 
     # 可视化路网结构
@@ -492,7 +494,7 @@ if __name__ == '__main__':
         save_dir='./data/LN/',
         is_save=True,
         day_count_list=[
-            2, 2
+            30, 31, 30, 9
         ]
     )
 
@@ -500,3 +502,11 @@ if __name__ == '__main__':
     npz_data = np.load('./data/LN/LN.npz')
     flow_mat = npz_data['data']
     print(flow_mat.shape)
+
+    file_data = np.load('./data/LN/LN.npz')
+    plt.figure()
+
+    flow_mat = file_data['data']
+    flow_0 = flow_mat[:2880, 345, 4]
+    plt.plot(range(2880), flow_0)
+    plt.show()
