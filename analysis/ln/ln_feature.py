@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
-    npz_data = np.load('../data/LN/LN.npz')
+    npz_data = np.load('../../data/LN/LN.npz')
     all_time_data = npz_data['data']
 
     # 1-plot [one node, all feature, all time] figure

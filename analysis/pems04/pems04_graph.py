@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
 
-    edges = pd.read_csv('../data/PEMS04/PEMS04.csv')
+    edges = pd.read_csv('../../data/PEMS04/PEMS04.csv')
     G = nx.from_pandas_edgelist(edges, source='from', target='to', edge_attr='cost')
     # plot graph
     nx.draw(G, node_size=30, node_color='r')
