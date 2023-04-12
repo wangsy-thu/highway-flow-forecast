@@ -3,7 +3,7 @@ import torch
 
 
 def print_platform_config():
-    print('Hello Highway Flow Forecast ASTGCN')
+    print('Hello Highway Flow Forecast STACGIN')
     print('========Configuration========')
     print(f'Python Version: {platform.python_version()}')
     print(f'Pytorch CUDA Available: {torch.cuda.is_available()}')
