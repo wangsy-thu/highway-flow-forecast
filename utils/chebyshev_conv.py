@@ -88,9 +88,12 @@ def get_adjacency_matrix(distance_df_filename, num_of_vertices, id_filename=None
                 f.readline()
                 reader = csv.reader(f)
                 for row in reader:
-                    if len(row) != 3:
+                    if len(row) == 2:
+                        i, j = int(row[0]), int(row[1])
+                        A[i, j] = 1
+                    elif len(row) == 3:
+                        i, j, distance = int(row[0]), int(row[1]), float(row[2])
+                        distanceA[i, j] = distance
+                    else:
                         continue
-                    i, j, distance = int(row[0]), int(row[1]), float(row[2])
-                    A[i, j] = 1
-                    distanceA[i, j] = distance
             return A, distanceA
