@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 
+
 def save_to_csv(dataset_name: str, file_name: str,
                 column_list: list, data_list: list):
     """
@@ -28,17 +29,17 @@ def save_to_csv(dataset_name: str, file_name: str,
         writer.writerows(data_list)
 
 
-def load_flow_data(dataset_name: str, dtype=np.float32, is_save=True) -> np.ndarray:
+def load_flow_data(dataset_name: str, data_type=np.float32, is_save=True) -> np.ndarray:
     """
     加载流量数据
     :param dataset_name: 数据集名称
-    :param dtype: 数据类型
+    :param data_type: 数据类型
     :param is_save: 是否保存文件
     :return: np.ndarray (T, N, 1)
     """
     flow_df = pd.read_csv('./data/' + dataset_name.upper()
-                + '/' + dataset_name.lower() + '_speed.csv')
-    flow_mat = np.array(flow_df, dtype=dtype)
+                          + '/' + dataset_name.lower() + '_speed.csv')
+    flow_mat = np.array(flow_df, dtype=data_type)
     flow_mat = np.expand_dims(flow_mat, axis=2)  # 扩展维度
     if is_save:
         np.savez_compressed(
@@ -48,18 +49,17 @@ def load_flow_data(dataset_name: str, dtype=np.float32, is_save=True) -> np.ndar
     return flow_mat
 
 
-
-def load_edge_list(dataset_name: str, dtype=np.float32, is_save=True):
+def load_edge_list(dataset_name: str, data_type=np.float32, is_save=True):
     """
     加载边列表数据
     :param dataset_name: 数据集名称
-    :param dtype: 数据类型
+    :param data_type: 数据类型
     :param is_save: 是否保存文件
     :return: np.ndarray (edge_num, 2)
     """
     adj_data = pd.read_csv('./data/' + dataset_name.upper()
-                + '/' + dataset_name.lower() + '_adj.csv', header=None)
-    adj_mat = np.array(adj_data, dtype=dtype)
+                           + '/' + dataset_name.lower() + '_adj.csv', header=None)
+    adj_mat = np.array(adj_data, dtype=data_type)
     vertices_num, _ = adj_mat.shape
     edge_list = []
     # 该矩阵必须对称
@@ -72,7 +72,7 @@ def load_edge_list(dataset_name: str, dtype=np.float32, is_save=True):
     if is_save:
         save_to_csv(dataset_name, '{}.csv'.format(dataset_name.upper()),
                     ['from', 'to'], edge_list)
-    return np.array(edge_list, dtype=dtype).T
+    return np.array(edge_list, dtype=data_type).T
 
 
 if __name__ == '__main__':
