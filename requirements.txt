@@ -8,3 +8,4 @@ networkx
 scipy
 scikit-learn
 tqdm
+pika
