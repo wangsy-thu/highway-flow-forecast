@@ -22,8 +22,8 @@ if __name__ == '__main__':
         degree_count.append(y_data.count(i))
         degree_val.append(i)
     plt.bar(degree_val, degree_count)
-    plt.xlabel('node id')
-    plt.ylabel('degree')
+    plt.xlabel('degree')
+    plt.ylabel('node count')
     plt.savefig('./plot_feature/node_distribution.png')
     plt.close()
 

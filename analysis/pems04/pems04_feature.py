@@ -7,7 +7,7 @@ if __name__ == '__main__':
     all_time_data = npz_data['data']
 
     # 1-plot [one node, all feature, all time] figure
-    single_node_data = all_time_data[:, 0, :]
+    single_node_data = all_time_data[:4 * 24 * 12, 0, :]
     print(single_node_data.shape)
     plt.title('time-feature0')
     plt.plot([i for i in range(single_node_data.shape[0])], single_node_data[:, 0])

@@ -233,6 +233,13 @@ class STACGINBlock(nn.Module):
         # 层归一化
         self.layer_norm = nn.LayerNorm(time_channels)
 
+        # 时间注意力后的层归一化
+        self.spatial_layer_norm = nn.LayerNorm(in_channels)
+
+        # 空间注意力后的层归一化
+        self.temporal_layer_norm = nn.LayerNorm(in_channels)
+
+
     def forward(self, x_matrix):
         """
         前向传播函数
@@ -251,15 +258,29 @@ class STACGINBlock(nn.Module):
             temporal_att
         ).reshape(batch_size, vertices_num, features_num, time_step_num)
 
+        # 时间注意力后的残差连接与层归一化
+        # 动态变化过程 (B, N, F, T) -permute-> (B, N, T, F)
+        # (B, N, T, F) -layer_norm-> (B, N, T, F) -permute-> (B, N, F, T)
+        x_mat_t_att_norm = self.temporal_layer_norm(
+            x_mat_t_att.permute(0, 1, 3, 2) + x_matrix.permute(0, 1, 3, 2)
+        ).permute(0, 1, 3, 2)
+
         # 计算空间注意力，与时间注意力同理
-        spatial_att = self.SAtt(x_mat_t_att)  # (B, N, N)
+        spatial_att = self.SAtt(x_mat_t_att_norm)  # (B, N, N)
         x_mat_s_att = torch.matmul(
             spatial_att,
-            x_mat_t_att.reshape(batch_size, vertices_num, -1)
+            x_mat_t_att_norm.reshape(batch_size, vertices_num, -1)
         ).reshape(batch_size, vertices_num, features_num, time_step_num)
 
+        # 空间注意力后的残差连接与层归一化
+        # 动态变化过程 (B, N, F, T) -permute-> (B, N, T, F)
+        # (B, N, T, F) -layer_norm-> (B, N, T, F) -permute-> (B, N, F, T)
+        x_mat_s_att_norm = self.spatial_layer_norm(
+            x_mat_t_att_norm.permute(0, 1, 3, 2) + x_mat_s_att.permute(0, 1, 3, 2)
+        ).permute(0, 1, 3, 2)
+
         # GIN 空间卷积
-        x_mat_cheb_conv = self.SpatialConv(x_mat_s_att)  # (B, N, spatial_channels, T)
+        x_mat_cheb_conv = self.SpatialConv(x_mat_s_att_norm)  # (B, N, spatial_channels, T)
 
         # 时间卷积
         x_mat_time_conv = self.TimeConv(x_mat_cheb_conv.permute(0, 2, 1, 3))  # (B, N, time_channels, T)
