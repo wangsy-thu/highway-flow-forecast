@@ -94,6 +94,7 @@ def get_adjacency_matrix(distance_df_filename, num_of_vertices, id_filename=None
                     elif len(row) == 3:
                         i, j, distance = int(row[0]), int(row[1]), float(row[2])
                         distanceA[i, j] = distance
+                        A[i, j] = 1
                     else:
                         continue
             return A, distanceA
