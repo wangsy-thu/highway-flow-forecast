@@ -84,7 +84,7 @@ class TemporalAttentionLayer(nn.Module):
 
 class GinConvLayer(nn.Module):
     """
-    基于 GAT 卷积的空间卷积模型
+    基于 GIN 卷积的空间卷积模型
     """
 
     def __init__(self, in_channels: int, out_channels: int,
@@ -99,7 +99,7 @@ class GinConvLayer(nn.Module):
         self.K = K
         self.in_channels = in_channels
         self.out_channels = out_channels
-        # 多层 GAT 卷积
+        # 多层 GIN 卷积
         self.ginConvList = nn.ModuleList([
             GINConv(
                 nn=nn.Linear(
