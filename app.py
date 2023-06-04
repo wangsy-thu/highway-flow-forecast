@@ -84,8 +84,8 @@ edge_index = get_edge_index(adj_filename)
 print('batch size: {}'.format(batch_size))
 
 # 2,加载训练时的均值与方差
-# file_data = np.load('./data/LOS/LOS_r1_d0_w0_stacgin.npz')
-# mean, std = file_data['mean'], file_data['std']
+file_data = np.load('./data/PEMS04/PEMS04_r1_d0_w0_stacgin.npz')
+mean, std = file_data['mean'], file_data['std']
 
 stacgin_net = make_model(
     block_num=nb_block,
@@ -102,8 +102,8 @@ stacgin_net = make_model(
     edge_index=torch.from_numpy(edge_index).type(torch.long).to(DEVICE)
 )
 
-# params_file_name = os.path.join(params_path, 'epoch_%s.params' % '78')
-# stacgin_net.load_state_dict(torch.load(params_file_name, map_location='cpu'))
+params_file_name = os.path.join(params_path, 'epoch_%s.params' % '77')
+stacgin_net.load_state_dict(torch.load(params_file_name, map_location='cpu'))
 stacgin_net.train(False)
 print('===== Model Load Success =====')
 
@@ -143,19 +143,34 @@ def forecast_npz_flow():
     预测流量
     :return: Common Resp
     """
-    # # 1, 读取待预测文件
-    # history_mat = np.load('./workspace/history-flow.npz')['data']
-    #
-    # # 2, 生成预测结果
-    # input_flow = torch.from_numpy(history_mat).float().unsqueeze(0)
-    # input_norm = (input_flow - torch.from_numpy(mean)) / torch.from_numpy(std)
-    # with torch.no_grad():
-    #     result: torch.Tensor = stacgin_net(input_norm)
-    #
-    # # 3, 将预测结果写回文件中
-    # res_mat = result.permute(0, 2, 1).numpy()[0, :, :]  # 去掉 batch_size 维度
-    # np.savez_compressed('./workspace/forecast-result.npz',
-    #                     data = res_mat)
+    # 1, 读取待预测文件
+    history_mat = np.load('./workspace/history-flow.npz')['data']
+
+    # 2, 生成预测结果
+    input_flow = torch.from_numpy(history_mat).to(
+        torch.float32
+    ).unsqueeze(0).permute(0, 2, 3, 1)
+    input_norm = (input_flow - torch.from_numpy(mean)) / torch.from_numpy(std)
+    with torch.no_grad():
+        result: torch.Tensor = stacgin_net(input_norm.to(torch.float32))
+
+    # 3, 将预测结果写回文件中
+    res_mat = result.permute(0, 2, 1).numpy()[0, :, :]  # 去掉 batch_size 维度
+    np.savez_compressed('./workspace/forecast-result.npz',
+                        data = res_mat)
+
+    # 重新加载
+    # 1, 加载预测结果的 Numpy 数据到内存
+    print('===== Reload Result Data =====')
+    if os.path.exists('./workspace/forecast-result.npz'):
+        res_mat = np.load('./workspace/forecast-result.npz')['data']
+    # 2, 加载历史数据的 Numpy 数据到内存
+    if os.path.exists('./workspace/history-flow.npz'):
+        history_mat = np.load('./workspace/history-flow.npz')['data']
+    # 3, 这里以 PEMS04 数据集为例拼接
+    global res
+    res = np.concatenate((history_mat[:, :, 0], res_mat), axis=0)
+    print('===== Result Data Load Success =====')
 
     # 4, 返回预测结果
     return make_common_response(
