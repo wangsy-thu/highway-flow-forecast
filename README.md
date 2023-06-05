@@ -28,6 +28,9 @@ pip install numpy pandas matplotlib networkx scipy scikit-learn
 
 # tqdm
 pip install tqdm
+
+# flask
+pip install flask
 ```
 
 ## 三、Train Model
@@ -44,3 +47,9 @@ use TensorboardX to trace the training process
 ```shell
 tensorboard --logdir={your log directory(full path)}
 ```
+
+## 五、Additional Data
+
+数据集与实验结果在[百度网盘链接](https://pan.baidu.com/s/1gKY6Y60119xFHpqCPRZiSQ)。
+
+提取码私信我获取。
